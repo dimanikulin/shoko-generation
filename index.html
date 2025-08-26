@@ -1,15 +1,180 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Torch.mp3</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Congratulation Generator — OpenAI</title>
+  <style>
+    :root {
+      --bg: #0b1320; --card: #111a2b; --ink: #e8eefc; --muted: #9fb0d3; --acc: #6aa3ff; --danger:#ff6a8a;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji"; background: var(--bg); color: var(--ink); }
+    .wrap { max-width: 860px; margin: 40px auto; padding: 0 16px; }
+    h1 { font-weight: 800; letter-spacing: .2px; margin: 0 0 8px; }
+    p.lead { color: var(--muted); margin: 0 0 20px; }
+    .card { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.00)); border: 1px solid rgba(255,255,255,0.08); border-radius: 20px; padding: 20px; box-shadow: 0 10px 30px rgba(0,0,0,.25); }
+    label { display: block; font-weight: 600; margin: 16px 0 6px; }
+    input[type="text"], input[type="password"], select, textarea { width: 100%; border: 1px solid rgba(255,255,255,0.14); background: #0f1a2e; color: var(--ink); border-radius: 12px; padding: 12px 14px; font-size: 16px; outline: none; }
+    textarea { resize: vertical; min-height: 120px; }
+    .row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .actions { display: flex; gap: 12px; align-items: center; margin-top: 16px; }
+    button { background: var(--acc); color: #0a1020; border: none; padding: 12px 16px; border-radius: 12px; font-weight: 700; cursor: pointer; }
+    button[disabled] { opacity: .5; cursor: not-allowed; }
+    .note { font-size: 13px; color: var(--muted); }
+    .error { color: var(--danger); font-weight: 700; margin-top: 10px; }
+    .result { white-space: pre-wrap; background: #0f1a2e; border-radius: 12px; padding: 14px; border: 1px solid rgba(255,255,255,0.1); }
+    .grid { display: grid; gap: 16px; }
+    .audio { margin-top: 8px; }
+    footer { margin-top: 30px; color: var(--muted); font-size: 13px; }
+    .spinner { width: 18px; height: 18px; border: 2px solid rgba(255,255,255,.3); border-top-color: #fff; border-radius: 50%; display: inline-block; animation: spin 1s linear infinite; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+  </style>
 </head>
 <body>
-    <h1>Welcome to Torch.mp3 generator!</h1>
-    <p id="message"></p>
-    <button onclick="displayMessage()">Click Me</button>
+  <div class="wrap">
+    <h1>🎉 Congratulation Generator</h1>
+    <p class="lead">Type your raw ideas, pick the language, paste an OpenAI API key, and get a polished message (plus optional audio).</p>
 
-    <script src="script.js"></script>
+    <div class="card grid">
+      <div>
+        <label for="text">Your idea / rough congratulation</label>
+        <textarea id="text" placeholder="e.g., Happy birthday to my friend Anna, she loves hiking and matcha. Wish her success and joy."></textarea>
+      </div>
+
+      <div class="row">
+        <div>
+          <label for="lang">Target language</label>
+          <select id="lang">
+            <option value="English" selected>English</option>
+            <option value="Ukrainian">Ukrainian</option>
+            <option value="Polish">Polish</option>
+            <option value="German">German</option>
+            <option value="Spanish">Spanish</option>
+            <option value="French">French</option>
+            <option value="Italian">Italian</option>
+            <option value="Portuguese">Portuguese</option>
+            <option value="Russian">Russian</option>
+          </select>
+        </div>
+        <div>
+          <label for="apikey">OpenAI API Key</label>
+          <input id="apikey" type="password" placeholder="sk-..." autocomplete="off" />
+          <div class="note">Your key is used only in your browser. Avoid using production keys on public machines.</div>
+        </div>
+      </div>
+
+      <div class="actions">
+        <button id="go">Generate</button>
+        <label><input type="checkbox" id="speak" checked /> Also create speech (mp3)</label>
+        <span id="status" class="note"></span>
+      </div>
+
+      <div id="err" class="error" role="alert" style="display:none"></div>
+
+      <div id="out" style="display:none">
+        <label>Result</label>
+        <div id="result" class="result"></div>
+        <audio id="player" class="audio" controls style="display:none"></audio>
+      </div>
+    </div>
+
+    <footer>
+      Tip: You can revoke this key anytime in your OpenAI dashboard. For production, proxy requests through your own backend rather than exposing keys in the browser.
+    </footer>
+  </div>
+
+  <script>
+    const el = (id) => document.getElementById(id);
+
+    const status = (msg, spinning = false) => {
+      const s = el('status');
+      s.innerHTML = spinning ? `<span class="spinner"></span> ${msg}` : msg;
+    };
+
+    async function createCompletion(key, lang, idea) {
+      const body = {
+        model: 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: 'You write concise, heartfelt congratulation messages. Always respond only in the target language. Keep it under 120 words. Add tasteful emojis if appropriate.' },
+          { role: 'user', content: `Target language: ${lang}\n\nDraft / details:\n${idea}` }
+        ],
+        temperature: 0.7
+      };
+
+      const res = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${key}`
+        },
+        body: JSON.stringify(body)
+      });
+      if (!res.ok) throw new Error(`Text request failed: ${res.status} ${res.statusText}`);
+      const data = await res.json();
+      return data.choices?.[0]?.message?.content?.trim() || '';
+    }
+
+    async function textToSpeech(key, text) {
+      const res = await fetch('https://api.openai.com/v1/audio/speech', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${key}`
+        },
+        body: JSON.stringify({
+          model: 'gpt-4o-mini-tts',
+          voice: 'alloy',
+          input: text,
+          format: 'mp3'
+        })
+      });
+      if (!res.ok) throw new Error(`Speech request failed: ${res.status} ${res.statusText}`);
+      const blob = await res.blob();
+      return URL.createObjectURL(blob);
+    }
+
+    function setBusy(b) {
+      el('go').disabled = b;
+    }
+
+    el('go').addEventListener('click', async () => {
+      el('err').style.display = 'none';
+      el('out').style.display = 'none';
+      el('player').style.display = 'none';
+
+      const idea = el('text').value.trim();
+      const lang = el('lang').value;
+      const key = el('apikey').value.trim();
+      const wantsSpeech = el('speak').checked;
+
+      if (!idea) { el('err').textContent = 'Please enter your congratulation idea.'; el('err').style.display = 'block'; return; }
+      if (!key) { el('err').textContent = 'Please paste your OpenAI API key.'; el('err').style.display = 'block'; return; }
+
+      try {
+        setBusy(true);
+        status('Generating text…', true);
+        const msg = await createCompletion(key, lang, idea);
+        el('result').textContent = msg || '(No content)';
+        el('out').style.display = 'block';
+        status('');
+
+        if (wantsSpeech && msg) {
+          status('Synthesizing speech…', true);
+          const url = await textToSpeech(key, msg);
+          const player = el('player');
+          player.src = url;
+          player.style.display = 'block';
+          status('');
+        }
+      } catch (e) {
+        el('err').textContent = e.message || String(e);
+        el('err').style.display = 'block';
+        status('');
+      } finally {
+        setBusy(false);
+      }
+    });
+  </script>
 </body>
 </html>
