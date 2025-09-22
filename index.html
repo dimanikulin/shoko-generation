@@ -32,7 +32,7 @@
 <body>
   <div class="wrap">
     <h1>🔊 Congratulation Speech Generator</h1>
-    <p class="lead">Type your congratulation text, pick the language, paste an OpenAI API key, and get back an MP3 speech.</p>
+    <p class="lead">Type your congratulation text, pick the language, select a voice, paste an OpenAI API key, and get back an MP3 speech.</p>
 
     <div class="card">
       <label for="text">Your congratulation text</label>
@@ -51,6 +51,17 @@
             <option value="it">Italian</option>
             <option value="pt">Portuguese</option>
             <option value="ru">Russian</option>
+          </select>
+        </div>
+        <div>
+          <label for="voice">Voice</label>
+          <select id="voice">
+            <option value="alloy" selected>Alloy</option>
+            <option value="verse">Verse</option>
+            <option value="serene">Serene</option>
+            <option value="sage">Sage</option>
+            <option value="bright">Bright</option>
+            <option value="calm">Calm</option>
           </select>
         </div>
         <div>
@@ -83,7 +94,7 @@
       s.innerHTML = spinning ? `<span class="spinner"></span> ${msg}` : msg;
     };
 
-    async function textToSpeech(key, text, lang) {
+    async function textToSpeech(key, text, lang, voice) {
       const res = await fetch('https://api.openai.com/v1/audio/speech', {
         method: 'POST',
         headers: {
@@ -92,7 +103,7 @@
         },
         body: JSON.stringify({
           model: 'gpt-4o-mini-tts',
-          voice: 'alloy',
+          voice: voice,
           input: text,
           format: 'mp3'
         })
@@ -113,6 +124,7 @@
       const text = el('text').value.trim();
       const key = el('apikey').value.trim();
       const lang = el('lang').value;
+      const voice = el('voice').value;
 
       if (!text) { el('err').textContent = 'Please enter your congratulation text.'; el('err').style.display = 'block'; return; }
       if (!key) { el('err').textContent = 'Please paste your OpenAI API key.'; el('err').style.display = 'block'; return; }
@@ -120,7 +132,7 @@
       try {
         setBusy(true);
         status('Synthesizing speech…', true);
-        const url = await textToSpeech(key, text, lang);
+        const url = await textToSpeech(key, text, lang, voice);
         const player = el('player');
         player.src = url;
         player.style.display = 'block';
